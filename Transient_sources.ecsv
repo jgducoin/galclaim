@@ -1,0 +1,13 @@
+# %ECSV 0.9
+# ---
+# datatype:
+# - {name: ID, datatype: string}
+# - {name: RA, datatype: float64}
+# - {name: Dec, datatype: float64}
+# - {name: pos_err, datatype: float64}
+# schema: astropy-2.0
+ID RA Dec pos_err
+NOTtest001 354.318375 53.41569444 0.1
+TREtest002 300.33045833 23.4495 0.3
+CAHAtest003 59.09304167 -40.81766667 0.1
+Kil170817A 197.45033333 -23.38144444 0.05
