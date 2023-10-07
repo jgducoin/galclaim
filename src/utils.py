@@ -12,6 +12,7 @@ from astroquery.vizier import Vizier
 import copy
 import requests
 from astropy.io import ascii
+import os
 
 """
 Created on Tue Apr 21 22:33:58 2020
@@ -67,6 +68,11 @@ def add_object_type(table, catalog):
                     type_list.append('unknown')
             else:
                 type_list.append('unknown')
+    
+    elif catalog == 'GLADE':
+        #the GLADE catalog is supposed to only contain galaxy
+        type_list.append('galaxy')
+    
     else:
         for row in table:
             type_list.append('unknown')
@@ -84,51 +90,32 @@ def query_catalog(coords, radius, catalog, radius_min=20*u.arcsecond):
     if catalog == "Pan-STARRS":
         # Avoid duplicates using the flag below
         # Information taken from http://ps1images.stsci.edu/ps1_dr2_api.html
-        # Might be other useful flags to check
         constraints = {'primaryDetection':1, 'sort_by':'distance.ASC'}
 
-        # Can make use of the columns argument to decrease the size of the table
-        columns = ['', '', '']
         query = Catalogs.query_region(coords,
                                       radius=radius,
                                       catalog="Panstarrs",
                                       data_release="dr2",
                                       table="stack",
-                                      #columns='*', deprecated in the new version? 
                                       primaryDetection = 1)
-                                      #sort_by=[("asc", "distance")])
         if len(query) == 0:
             query = None
         else:
             query = add_object_type(query, catalog)
             query['distance_arcs'] = query['distance'] * 3600
-            query.sort('distance_arcs')
-
-    elif catalog == 'HSC':
-        # Not sure if the constraints works
-        # magtype=1: magaper2
-        # magtype=2: magauto
-        constraints = {'sort_by':'distance.ASC'}
-
-        query = Catalogs.query_region(coords,
-                                      radius=radius,
-                                      catalog="HSC",
-                                      version=3,
-                                      magtype=2,
-                                      columns='*',
-                                      **constraints)
-
-        if len(query) == 0:
-            query = None
-        else:
-            query = add_object_type(query, catalog)
-            query['distance_arcs'] = query['Distance'] * 60
-            query.sort('distance_arcs')
-
+            query.sort('distance_arcs')    
 
     elif catalog == 'AllWISE':
         # Need to sort these columns
-        selcols = "designation,ra,dec,w1mag,w1mpro,w1gmag,ext_flg,var_flg,ph_qual,xscprox,r_2mass,na,nb,w1snr,w1rchi2,rchi2,rchi2,w1sat,n_2mass,tmass_key,j_m_2mass,h_m_2mass,k_m_2mass,sigra,sigdec,sigradec,w1sigmpro,satnum,w1rchi2_pm,cc_flags,rel,w1nm,w1flux,w1flg,w1mcor,w1magp,rho12,w1rsemi,w1ba,w1pa,w1gerr,w1gflg,j_msig_2mass,h_msig_2mass,k_msig_2mass,w2mpro,w2sigmpro,w2snr,w2rchi2,w3mpro,w3sigmpro,w3snr,w3rchi2,w4mpro,w4sigmpro,w4snr,w4rchi2,w2gmag,w2gerr,w2gflg,w3gmag,w3gerr,w3gflg,w4gmag,w4gerr,w4gflg"
+        selcols = "designation,ra,dec,w1mag,w1mpro,w1gmag,ext_flg,var_flg,\
+            ph_qual,xscprox,r_2mass,na,nb,w1snr,w1rchi2,rchi2,rchi2,w1sat,\
+            n_2mass,tmass_key,j_m_2mass,h_m_2mass,k_m_2mass,sigra,sigdec,\
+            sigradec,w1sigmpro,satnum,w1rchi2_pm,cc_flags,rel,w1nm,w1flux,\
+            w1flg,w1mcor,w1magp,rho12,w1rsemi,w1ba,w1pa,w1gerr,w1gflg,\
+            j_msig_2mass,h_msig_2mass,k_msig_2mass,w2mpro,w2sigmpro,w2snr,\
+            w2rchi2,w3mpro,w3sigmpro,w3snr,w3rchi2,w4mpro,w4sigmpro,w4snr,\
+            w4rchi2,w2gmag,w2gerr,w2gflg,w3gmag,w3gerr,w3gflg,w4gmag,w4gerr,\
+            w4gflg"
         query = Irsa.query_region(coords,
                                   catalog='allwise_p3as_psd',
                                   selcols=selcols,
@@ -137,6 +124,18 @@ def query_catalog(coords, radius, catalog, radius_min=20*u.arcsecond):
             query = None
         else:
             query = add_object_type(query, catalog)
+            
+    elif catalog == 'GLADE':
+
+        query = Vizier(columns=['all']).query_region(coords, 
+                                    radius=radius,
+                                    catalog='VII/291/gladep')
+        
+        if len(query) == 0:
+            query = None
+        else:
+            query = query[0]
+            query = add_object_type(query, catalog)
 
     return query
 
@@ -144,9 +143,7 @@ def query_catalog(coords, radius, catalog, radius_min=20*u.arcsecond):
 def count_galaxies_in_query(query_transient_box, query_random, RA, Dec, catalog):
     """
     This function count the number of galaxies in the outputed (and parsed) query from Pan-STARRS
-    using the criterion : PSF - Kron > 0.05  in i band (see https://arxiv.org/pdf/1612.05560.pdf)
-    
-    Then keep the number with only imag < imag_cut
+    AllWISE and GLADE.
     
     Input parameters
     ----------------
@@ -160,8 +157,7 @@ def count_galaxies_in_query(query_transient_box, query_random, RA, Dec, catalog)
     Dec: float
         Dec of the best transient localisation
     """
-    #print("query_transient_box =", query_transient_box)
-    #print("query_transient_box.columns =", query_transient_box.columns)
+    
     # Number of objects in the transient error box query
     N_obj_transient_box = len(query_transient_box)
 
@@ -182,6 +178,7 @@ def count_galaxies_in_query(query_transient_box, query_random, RA, Dec, catalog)
                 'yKronMagErr']
         RA_col = 'raMean'
         Dec_col = 'decMean'
+        
     elif catalog == 'AllWISE':
         Ncounts_tot = {'w1mpro':copy.deepcopy(nan_array),
                        'w2mpro':copy.deepcopy(nan_array),
@@ -194,12 +191,28 @@ def count_galaxies_in_query(query_transient_box, query_random, RA, Dec, catalog)
                 'w4sigmpro']
         RA_col = 'ra'
         Dec_col = 'dec'
+        
+    elif catalog == 'GLADE':
+        Ncounts_tot = {'Bmag':copy.deepcopy(nan_array),
+                       'Jmag':copy.deepcopy(nan_array),
+                       'Hmag':copy.deepcopy(nan_array),
+                       'Kmag':copy.deepcopy(nan_array)}
+        magerr_cols = [
+                'e_Bmag',
+                'e_Jmag',
+                'e_Hmag',
+                'e_Kmag']
+        RA_col = 'RAJ2000'
+        Dec_col = 'DEJ2000'
+        
     if query_random is None:
         return Ncounts_tot
 
     else:
         for j in range(N_obj_transient_box):
+            
             counter = 0
+            
             for filt, N_list in Ncounts_tot.items():
                 query = copy.deepcopy(query_random)
 
@@ -228,7 +241,6 @@ def count_galaxies_in_query(query_transient_box, query_random, RA, Dec, catalog)
                         (query[magerr_cols[counter]].mask == False) & \
                         (query[filt].mask == False))
                         
-                
                 mask = mask_donuts & mask_mag & mask_star & mask_bad_mag
 
                 Ncounts = len(query[mask])
@@ -243,11 +255,14 @@ def count_galaxies_in_query(query_transient_box, query_random, RA, Dec, catalog)
                 #if there is no detection in a given band for the studied object
                 if np.isnan(float(query_transient_box[filt][j])):
                     Ncounts = np.nan
-                if np.isnan(float(query_transient_box[magerr_cols[counter]][j])):
+                #we exept the GLADE catalog from this below error being finite criterium
+                #indeed the GLADE catalog does not provide the error in B mag for most of the galaxies
+                if np.isnan(float(query_transient_box[magerr_cols[counter]][j])) and catalog != 'GLADE':
                     Ncounts = np.nan
 
                 Ncounts_tot[filt][j] = Ncounts
                 counter += 1
+                
         return Ncounts_tot
 
 
@@ -491,6 +506,7 @@ def hsccone_full(RA,DEC,
     #query the summary catalog
     query_summary = hsccone(ra=RA,dec=DEC,radius=radius,table="summary",release=release,format=format,magtype=magtype,
             columns=columns, verbose=verbose)
+    
     #convert output to astropy table
     query_summary = create_table(query_summary,verbose)
 
@@ -561,6 +577,7 @@ def get_N_in_image(self,RA, Dec,release="v3",
     
     #fetch all filter apearance in the query_transient_box and suppress double
     all_filter_appearance = np.array([])
+    
     for k in range(len(self.query_transient_box['Filter'])):
         all_filter_appearance = np.concatenate((all_filter_appearance,self.query_transient_box['Filter'][k]))
         
@@ -620,8 +637,6 @@ def get_N_in_image(self,RA, Dec,release="v3",
     return Ncounts_tot, dummy_radius, col_find_list
 
 
-
-
 def object_type_HSC(query_transient_box):
     """
     This function classifie as 'galaxy','star' or 'unknown' the compatible object
@@ -642,3 +657,22 @@ def object_type_HSC(query_transient_box):
             type_list.append('unknown')
 
     return type_list
+
+
+def download_GLADE(verbose=False):
+    """
+    This function download the GLADE catalog if not found locally
+
+    """
+    catalogFile = './catalogs/GLADE_2.4.txt'
+    
+    if not os.path.isfile(catalogFile):
+        print("GLADE catalog not found locally, start the automatic download")
+        url = 'http://glade.elte.hu/GLADE_2.4.txt'
+        os.system("wget -O ./catalogs/GLADE_2.4.txt {}".format(url))  
+    
+    else:
+        if verbose:
+            print("GLADE catalog found locally")
+        
+    return

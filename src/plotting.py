@@ -64,6 +64,13 @@ def plot_dist_pval(self, outputdir):
         "w4mpro" : "brown",
     }
 
+    GLADE_colors = {
+        "Bmag" : "BLUE",
+        "Jmag" : "darksalmon",
+        "Hmag" : "red",
+        "Kmag" : "brown",
+    }
+    
     i = 0
     y_max_filter = []
     y_min_filter = []
@@ -121,8 +128,18 @@ def plot_dist_pval(self, outputdir):
             temp_table_gal = temp_table[mask_gal]
             
             mask_unknown = temp_table["type"] == "unknown"
-            temp_table_unknown = temp_table[mask_unknown]     
+            temp_table_unknown = temp_table[mask_unknown]       
+
+        elif self.catalog == "GLADE":
             
+            mask_not_star = temp_table["type"] != "star"
+            temp_table_not_star = temp_table[mask_not_star]
+
+            mask_gal = temp_table["type"] == "galaxy"
+            temp_table_gal = temp_table[mask_gal]
+            
+            
+
         if self.catalog == "Pan-STARRS":
 
             #skip if there is no candidate in this filter
@@ -221,6 +238,25 @@ def plot_dist_pval(self, outputdir):
                 #register the max of each fiter for later ylim
                 y_max_filter += [max(temp_table_not_star[filt + "_pval"])]
                 y_min_filter += [min(temp_table_not_star[filt + "_pval"])]
+
+        if self.catalog == "GLADE":
+            
+            #skip if there is no candidate in this filter
+            if len(temp_table_not_star[filt + "_pval"]) :
+    
+                plt.scatter(
+                    temp_table_gal["dist_to_center"],
+                    temp_table_gal[filt + "_pval"],
+                    color=GLADE_colors[filt],
+                    marker=r"$\odot$",
+                    s=150,
+                    label=filt
+                )
+                
+                #register the max of each fiter for later ylim
+                y_max_filter += [max(temp_table_not_star[filt + "_pval"])]
+                y_min_filter += [min(temp_table_not_star[filt + "_pval"])]
+
 
         i += 1
 

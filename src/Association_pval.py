@@ -74,7 +74,7 @@ class Association:
         self.transient = transient
         self.error_radius = transient_error_radius
         self.verbose = verbose
-        if catalog not in ["Pan-STARRS", "AllWISE", "HSC"]:
+        if catalog not in ["Pan-STARRS", "AllWISE", "HSC", "GLADE"]:
             raise ValueError(
                 "the catalog you want to consider is not in the list of \
 possible catalog, it can be 'Pan-STARRS', 'HSC'  or 'AllWISE' "
@@ -96,7 +96,7 @@ possible catalog, it can be 'Pan-STARRS', 'HSC'  or 'AllWISE' "
                     unit=(u.degree,u.degree),
                     frame='icrs')
         
-        if catalog == "Pan-STARRS" or catalog == 'AllWISE':
+        if catalog == "Pan-STARRS" or catalog == 'AllWISE' or catalog == 'GLADE':
             query = utils.query_catalog(
                 coords,
                 radius * u.degree,
@@ -118,9 +118,8 @@ possible catalog, it can be 'Pan-STARRS', 'HSC'  or 'AllWISE' "
             
             if len(query) == 0:
                 
-                query = None
-
-        # Check that the query returns something
+                query = None   
+        
         return query
     
     
@@ -150,7 +149,7 @@ possible catalog, it can be 'Pan-STARRS', 'HSC'  or 'AllWISE' "
             self.total_area = (202 / 3600) ** 2 - (np.pi * 30. / 3600 ** 2)
 
 
-        elif self.catalog == 'Pan-STARRS' or self.catalog == "AllWISE":
+        elif self.catalog == 'Pan-STARRS' or self.catalog == "AllWISE" or self.catalog == "GLADE":
             big_radius = 0.05  # 3 arcmin
 
             # add a security, if the big radius is smaller than the transient error radius
@@ -164,19 +163,19 @@ possible catalog, it can be 'Pan-STARRS', 'HSC'  or 'AllWISE' "
                 radius=big_radius,
                 catalog=self.catalog,
             )
-
+            
             Ncounts = utils.count_galaxies_in_query(
                 self.query_transient_box, query, self.transient_RA, self.transient_Dec, self.catalog
             )
-
-            # the second terme is the center of the filed supressed (donuts)
+            
+            # the second terme is the center of the field supressed (donuts)
             self.total_area = (np.pi * big_radius ** 2) - (np.pi * 30. / 3600 ** 2)
-
+            
 
         self.sigma_list = copy.deepcopy(Ncounts)
         for filt, N_list in self.sigma_list.items():
             self.sigma_list[filt] = N_list / self.total_area
-
+            
 
     def compute_pval(self):
         """
@@ -226,7 +225,7 @@ possible catalog, it can be 'Pan-STARRS', 'HSC'  or 'AllWISE' "
         # security if no object compatible with the transient error box
         if self.pval_list is None:
             self.table = None
-            return
+            return     
 
         if catalog == 'Pan-STARRS':
 
@@ -277,14 +276,31 @@ possible catalog, it can be 'Pan-STARRS', 'HSC'  or 'AllWISE' "
                 'objType',
                 'dist_to_center'
             ]
+
+        elif catalog == 'GLADE':
+            self.table = self.query_transient_box[
+                'GLADE_',
+                'RAJ2000',
+                'DEJ2000',
+                'Bmag',
+                'e_Bmag',
+                'Jmag',
+                'e_Jmag',
+                'Hmag',
+                'e_Hmag',
+                'Kmag',
+                'e_Kmag',
+                'objType',
+                'dist_to_center',
+                'zcmb',
+                'e_z'
+            ]
             
             
-        #type_list = self.table['objType']
         self.table.rename_column('objType', 'type')
         # go back to arcsec for the distance_to_center
         self.table["dist_to_center"] = self.table["dist_to_center"] * 3600
         self.table["dist_to_center"] = np.round(self.table["dist_to_center"],3)
-        #self.table["type"] = type_list
 
         for filt, pval in self.pval_list.items():
             self.table[filt + "_pval"] = pval
@@ -292,7 +308,34 @@ possible catalog, it can be 'Pan-STARRS', 'HSC'  or 'AllWISE' "
         self.table.sort("dist_to_center")
         
         
+    def check_redshift(self,z_min,z_max):
+        """
+        This function add a column in the output file checking if the redshift
+        is compatible with the provided values.
+        """
+        
+        # security if no object compatible with the transient error box
+        if self.pval_list is None:
+            return     
+        
+        redshift_ckeck_column = ['yes']*len(self.table)
+        
+        self.table['compatible_z'] = redshift_ckeck_column
+        
+        if self.catalog == 'GLADE' :
+        
+            for i in range(len(self.table)) :
 
+                if (self.table['zcmb'][i] + self.table['e_z'][i]) < z_min :
+                    
+                    self.table['compatible_z'][i] = 'no'
+                
+                if (self.table['zcmb'][i] - self.table['e_z'][i]) > z_max :
+                    
+                    self.table['compatible_z'][i] = 'no'    
+
+        return
+        
 
     def parse_result_HSC(self):
         """
@@ -409,6 +452,16 @@ def compute_distance_list(self):
 
         col_dist = sep.value 
 
+    if self.catalog == "GLADE":
+        coords = SkyCoord(
+                    self.query_transient_box["RAJ2000"],
+                    self.query_transient_box["DEJ2000"],
+                    unit=(u.degree,u.degree),
+                    frame='icrs')
+        sep = coords.separation(transient_center)
+
+        col_dist = sep.value 
+
     self.query_transient_box["dist_to_center"] = col_dist
 
     return
@@ -420,6 +473,7 @@ def do_association(
     catalogs,
     do_plot_dist_pval=True,
     verbose=False,
+    do_redshift=None,
 ):
     """
     Final function call by ../crosmatch/HostHunt.py to compute pval for each transients
@@ -431,7 +485,7 @@ def do_association(
     mkdir_p(outputdir)
     mkdir_p(outputdir+'/plots')
     
-    print("computing pval for each transients ...")
+    print("Association launched ...")
 
     for i in range(len(transients)):
 
@@ -469,13 +523,31 @@ def do_association(
                 Association_transient.parse_result_HSC()
             elif catalog == "AllWISE":
                 Association_transient.parse_result(catalog)
-
+            elif catalog == "GLADE":
+                Association_transient.parse_result(catalog)
+                #In the case of GLADE we have an information about the redshift
+                #if requested by the user, add a columns in the output which compare
+                #the candidate host redshift and a given redshift range
+                #provided by the user
+                
+                if do_redshift != None:
+                    
+                    #check if the provided redshift min and max format is good
+                    if len(do_redshift) != 2:
+                        
+                        raise ValueError("Provided redshift format not understood.\
+                                         please use something like : --do_redshift 0.01 0.05")
+                        
+                    z_min = float(do_redshift[0])
+                    z_max = float(do_redshift[1])
+                
+                    Association_transient.check_redshift(z_min,z_max)
 
             if do_plot_dist_pval:
                 plotDir = os.path.join(outputdir)
                 if not os.path.exists(plotDir):
                     mkdir_p(plotDir)
-                # print("plotting the R(pavl) results")
+                    
                 plotting.plot_dist_pval(Association_transient, plotDir)
 
             # add the metadatas
@@ -536,7 +608,8 @@ if __name__ == "__main__":
                         type=str,
                         nargs='+',
                         default=[],
-                        help='Catalogs to be used for the association. Available are Pan-STARRS, HSC and AllWISE.')
+                        help='Catalogs to be used for the association.\
+                            Available are Pan-STARRS, HSC, AllWISE and GLADE.')
     
     parser.add_argument('--do_plots',
                         dest='do_plots',
@@ -550,13 +623,20 @@ if __name__ == "__main__":
                         action="store_true",
                         help='Enable verbose.')
     
+    parser.add_argument('--do_redshift',dest='do_redshift', nargs='+',
+                        help='Enable the redshift compatibility check. \
+                        If redshift min and redshift max are provided,\
+                        a dedicated check columns is added in the output file\
+                        ex : --do_redshift 0.01 0.05',
+                        required=False)
+    
     args = parser.parse_args()
 
     transient_file = Table.read(args.transient_file, format="ascii.ecsv")
 
 
     if not args.catalogs :
-        args.catalogs = ["Pan-STARRS", "HSC", "AllWISE"]
+        args.catalogs = ["Pan-STARRS", "HSC", "AllWISE", "GLADE"]
 
 
     do_association(
@@ -565,4 +645,5 @@ if __name__ == "__main__":
         catalogs=args.catalogs,
         do_plot_dist_pval=args.do_plots,
         verbose=args.verbose,
+        do_redshift=args.do_redshift,
     )
