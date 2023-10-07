@@ -34,7 +34,7 @@ def plot_dist_pval(self, outputdir):
 
     if self.table is None:
         if self.verbose:
-            print("No plot done for this transient as the table is empty")
+            print("No plot done for this transient and {} as the table is empty".format(self.catalog))
         return
     
     plt.ioff()

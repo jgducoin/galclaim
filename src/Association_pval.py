@@ -187,8 +187,6 @@ possible catalog, it can be 'Pan-STARRS', 'HSC'  or 'AllWISE' "
         """
         # Security if no object are found compatible with the transient error box
         if self.query_transient_box is None:
-            if self.verbose:
-                print("No compatible object found in the transient error box")
             self.pval_list = None
             return
 
@@ -488,8 +486,12 @@ def do_association(
     print("Association launched ...")
 
     for i in range(len(transients)):
-
+        
         transient = transients["ID"][i]
+        
+        if verbose:
+            
+            print('Search for {} ...'.format(transient))        
 
         RA = transients['RA'][i]
         DEC = transients['Dec'][i]
@@ -497,7 +499,12 @@ def do_association(
 
         # we consider candidate host inside an 30 arcsec radius circle
         transient_candidate_radius = 30 / 3600
-
+        
+        #launch a pre-check in the revised RC3 catalog to see if there is any
+        #bright galaxies near the requested field
+        #used radius is 30 arsec
+        utils.check_RC3(RA,DEC,transient,30,verbose)
+        
         for catalog in catalogs:
 
             # Initialyse the class
@@ -563,8 +570,8 @@ def do_association(
             if len(Association_transient.table) == 0:
                 if verbose:
                     print(
-                        "No compatible object found for transient {}. Empty file saved.".format(
-                            transients["ID"][i]
+                        "No compatible object found for transient {} in {}. Empty file saved.".format(
+                            transients["ID"][i],catalog
                         )
                     )
 

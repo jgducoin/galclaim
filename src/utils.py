@@ -659,20 +659,53 @@ def object_type_HSC(query_transient_box):
     return type_list
 
 
-def download_GLADE(verbose=False):
+def check_RC3(ra,dec,transient,radius=30,verbose=False):
     """
-    This function download the GLADE catalog if not found locally
+    This function search for nearby bright galaxy in the RC3 catalog
+    (https://heasarc.gsfc.nasa.gov/w3browse/all/rc3.html)
+    If any galaxy is found, a warning is printed and the galaxy properties
+    are stored in the result directory
+    Parameters
+    ----------
+    ra : float
+        right ascension
+    dec : float
+        declination
+    radius : float
+        radius for the search. The default is 30 arcsec.
 
     """
-    catalogFile = './catalogs/GLADE_2.4.txt'
+
+    coords = SkyCoord(
+                ra,
+                dec,
+                unit=(u.degree,u.degree),
+                frame='icrs')
     
-    if not os.path.isfile(catalogFile):
-        print("GLADE catalog not found locally, start the automatic download")
-        url = 'http://glade.elte.hu/GLADE_2.4.txt'
-        os.system("wget -O ./catalogs/GLADE_2.4.txt {}".format(url))  
+    query = Vizier(columns=['all']).query_region(coords, 
+                                radius=radius*u.arcsecond,
+                                catalog='VII/155/rc3')
+    
+    if len(query) == 0:
+        
+        if verbose :
+            
+            print('No nearby bright galaxy found for {} in RC3 catalog'.format(transient))
+        
+        return
     
     else:
-        if verbose:
-            print("GLADE catalog found locally")
+        
+        path_output = './results/{}_RC3.csv'.format(transient)
+        
+        query[0].write(path_output,
+                    format="ascii.ecsv",
+                    overwrite=True,
+                    delimiter=','
+                )
+        print('!!!!!!!!!!!!!!')
+        print('A nearby bright galaxy is found for {} in the RC3 catalog. Properties saved in {}.'.format(transient,path_output))
+        print('!!!!!!!!!!!!!!')
         
     return
+    
