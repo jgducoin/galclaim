@@ -24,7 +24,7 @@ We provide an example of input file format (Transient_sources.ecsv). You can sim
 
 `cd galclaim`
 
-`python Association_pval.py --transient_file ./Transient_sources.ecsv --catalogs AllWISE Pan-STARRS HSC --do_plots`
+`python ./src/Association_pval.py --transient_file ./Transient_sources.ecsv --catalogs AllWISE Pan-STARRS HSC --do_plots`
 
 Please check the results in the result directory, the output ecsv file is not empty when at least one compatible object is found.
 
