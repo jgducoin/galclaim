@@ -52,7 +52,7 @@ def add_object_type(table, catalog):
 
     elif catalog == 'AllWISE':
         # https://ui.adsabs.harvard.edu/abs/2015MNRAS.448.1305K/abstract
-        # W1mpro - J2MASS < 1.7 as a rough estimate
+        # W1mpro - J2MASS < -1.7 as a rough estimate
         # 78% of galaxies are selected, 1.8% cstellar contaminants
         # So does not mean that undefined are only stars
         # but when flagged as galaxy we are quite sure
@@ -129,7 +129,7 @@ def query_catalog(coords, radius, catalog, radius_min=20*u.arcsecond):
 
         query = Vizier(columns=['all']).query_region(coords, 
                                     radius=radius,
-                                    catalog='VII/291/gladep')
+                                    catalog='VII/281/glade2')
         
         if len(query) == 0:
             query = None

@@ -13,6 +13,8 @@ import numpy as np
 import utils
 import plotting
 import argparse
+import time
+
 
 """
 Created on Tue Apr 21 22:33:58 2020
@@ -65,7 +67,7 @@ class Association:
             Radius of the circle of the error box.
             To be provided in deg!!!
         catalog : string
-            catalog you want to consider, can be "Pan-STARRS", "HSC" or "AllWISE"
+            catalog you want to consider, can be "Pan-STARRS", "HSC", "GLADE" or "AllWISE"
         """
 
         self.transient_RA = RA
@@ -277,7 +279,11 @@ possible catalog, it can be 'Pan-STARRS', 'HSC'  or 'AllWISE' "
 
         elif catalog == 'GLADE':
             self.table = self.query_transient_box[
-                'GLADE_',
+                'PGC',
+                'GWGC',
+                'HyperLEDA',
+                '_2MASS',
+                'SDSS-DR12',
                 'RAJ2000',
                 'DEJ2000',
                 'Bmag',
@@ -290,8 +296,8 @@ possible catalog, it can be 'Pan-STARRS', 'HSC'  or 'AllWISE' "
                 'e_Kmag',
                 'objType',
                 'dist_to_center',
-                'zcmb',
-                'e_z'
+                'Dist',
+                'e_Dist'
             ]
             
             
@@ -311,6 +317,7 @@ possible catalog, it can be 'Pan-STARRS', 'HSC'  or 'AllWISE' "
         This function add a column in the output file checking if the redshift
         is compatible with the provided values.
         """
+        from astropy.cosmology import Planck18
         
         # security if no object compatible with the transient error box
         if self.pval_list is None:
@@ -320,16 +327,18 @@ possible catalog, it can be 'Pan-STARRS', 'HSC'  or 'AllWISE' "
         
         self.table['compatible_z'] = redshift_ckeck_column
         
+        #For glade 2.3 there is no provided redshift error, so we use luminosity distance
+        D_min = Planck18.luminosity_distance(z_min).value
+        D_max = Planck18.luminosity_distance(z_max).value
+        
         if self.catalog == 'GLADE' :
         
             for i in range(len(self.table)) :
 
-                if (self.table['zcmb'][i] + self.table['e_z'][i]) < z_min :
-                    
+                if (self.table['Dist'][i] + self.table['e_Dist'][i]) < D_min :
                     self.table['compatible_z'][i] = 'no'
                 
-                if (self.table['zcmb'][i] - self.table['e_z'][i]) > z_max :
-                    
+                if (self.table['Dist'][i] - self.table['e_Dist'][i]) > D_max :
                     self.table['compatible_z'][i] = 'no'    
 
         return
@@ -639,6 +648,8 @@ if __name__ == "__main__":
     
     args = parser.parse_args()
 
+    start = time.time()
+
     transient_file = Table.read(args.transient_file, format="ascii.ecsv")
 
 
@@ -654,3 +665,9 @@ if __name__ == "__main__":
         verbose=args.verbose,
         do_redshift=args.do_redshift,
     )
+    
+    end = time.time()
+    
+    if args.verbose :
+    
+    	print('duration = ', end - start)
