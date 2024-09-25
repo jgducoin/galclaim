@@ -251,14 +251,14 @@ possible catalog, it can be 'Pan-STARRS', 'HSC'  or 'AllWISE' "
             #rounding all the columns that we need to round
             self.table["gKronMag"] = np.round(self.table["gKronMag"],3)
             self.table["gKronMagErr"] = np.round(self.table["gKronMagErr"],3)
-            self.table["rKronMag"] = np.round(self.table["gKronMag"],3)
-            self.table["rKronMagErr"] = np.round(self.table["gKronMagErr"],3)
-            self.table["iKronMag"] = np.round(self.table["gKronMag"],3)
-            self.table["iKronMagErr"] = np.round(self.table["gKronMagErr"],3)
-            self.table["zKronMag"] = np.round(self.table["gKronMag"],3)
-            self.table["zKronMagErr"] = np.round(self.table["gKronMagErr"],3)
-            self.table["yKronMag"] = np.round(self.table["gKronMag"],3)
-            self.table["yKronMagErr"] = np.round(self.table["gKronMagErr"],3)
+            self.table["rKronMag"] = np.round(self.table["rKronMag"],3)
+            self.table["rKronMagErr"] = np.round(self.table["rKronMagErr"],3)
+            self.table["iKronMag"] = np.round(self.table["iKronMag"],3)
+            self.table["iKronMagErr"] = np.round(self.table["iKronMagErr"],3)
+            self.table["zKronMag"] = np.round(self.table["zKronMag"],3)
+            self.table["zKronMagErr"] = np.round(self.table["zKronMagErr"],3)
+            self.table["yKronMag"] = np.round(self.table["yKronMag"],3)
+            self.table["yKronMagErr"] = np.round(self.table["yKronMagErr"],3)
             
         elif catalog == 'AllWISE':
             self.table = self.query_transient_box[
