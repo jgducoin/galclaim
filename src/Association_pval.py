@@ -282,7 +282,7 @@ possible catalog, it can be 'Pan-STARRS', 'HSC'  or 'AllWISE' "
                 'PGC',
                 'GWGC',
                 'HyperLEDA',
-                '_2MASS',
+                '2MASS',
                 'SDSS-DR12',
                 'RAJ2000',
                 'DEJ2000',
@@ -310,6 +310,28 @@ possible catalog, it can be 'Pan-STARRS', 'HSC'  or 'AllWISE' "
             self.table[filt + "_pval"] = pval
 
         self.table.sort("dist_to_center")
+
+        # Sidak pval combinaison computation
+        
+        pval_cols = [filt + "_pval" for filt in self.pval_list.keys()]
+        
+        # minimum p-value across filters for each object
+        pvals = np.vstack([self.table[col] for col in pval_cols])
+        pmin = np.min(pvals, axis=0)
+        
+        # trial factor (=number of filter) depending on catalog
+        if self.catalog == "Pan-STARRS":
+            N = 5
+        elif self.catalog == "AllWISE":
+            N = 4
+        elif self.catalog == "GLADE":
+            N = 1
+        else:
+            N = 1
+        
+        sidak = 1 - (1 - pmin) ** N
+        
+        self.table["Sidak_pval"] = sidak
         
         
     def check_redshift(self,z_min,z_max):
@@ -400,6 +422,21 @@ possible catalog, it can be 'Pan-STARRS', 'HSC'  or 'AllWISE' "
             self.table[filt + "_pval"] = pval
 
         self.table.sort("dist_to_center")
+
+        # Sidak pval combinaison computation
+        
+        pval_cols = [filt + "_pval" for filt in self.pval_list.keys()]
+        
+        # minimum p-value across filters for each object
+        pvals = np.vstack([self.table[col] for col in pval_cols])
+        pmin = np.min(pvals, axis=0)
+        
+        # trial factor is number of filter available on the catalog
+        N = len(self.pval_list)
+
+        sidak = 1 - (1 - pmin) ** N
+        
+        self.table["Sidak_pval"] = sidak
 
 
 def compute_distance_list(self):

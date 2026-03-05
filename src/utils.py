@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 import sys
-from astropy.table import Table, vstack
+from astropy.table import Table, vstack, MaskedColumn
 from astropy.coordinates import SkyCoord
 import astropy.units as u
 from astroquery.mast import Catalogs
@@ -13,6 +13,8 @@ import copy
 import requests
 from astropy.io import ascii
 import os
+import io
+import json
 
 """
 Created on Tue Apr 21 22:33:58 2020
@@ -21,45 +23,33 @@ Created on Tue Apr 21 22:33:58 2020
          David Corre
 """
 
-
 if not sys.warnoptions:
     import warnings
     warnings.simplefilter("ignore")
 
 hscapiurl = "https://catalogs.mast.stsci.edu/api/v0.1/hsc"
 
+
 def add_object_type(table, catalog):
     """Adding information about object type"""
     type_list = []
 
     if catalog == 'Pan-STARRS':
-        # Linear cut is advised for its simplicity in:
-        # https://ui.adsabs.harvard.edu/abs/2016arXiv161205560C/abstract
-        # But nn linear cuts are required for faint objects:
-        # https://ui.adsabs.harvard.edu/abs/2014MNRAS.437..748F/abstract
-        # So far only implemented linear cut
         maglim = 21
         for row in table:
-            if not row['iKronMag'] or not row['iPSFMag']:
-                type_list.append('unknown')
-            elif row['iPSFMag'] - row['iKronMag'] > 0.05:
-                type_list.append('galaxy')
-            elif row['iPSFMag'] - row['iKronMag'] < 0.05:
-                type_list.append('star')
+            
+            if row['iPSFMag'] < maglim :
+                
+                if not row['iKronMag'] or not row['iPSFMag']:
+                    type_list.append('unknown')
+                elif row['iPSFMag'] - row['iKronMag'] > 0.05:
+                    type_list.append('galaxy')
+                elif row['iPSFMag'] - row['iKronMag'] < 0.05:
+                    type_list.append('star')
             else:
                 type_list.append('unknown')
 
-
     elif catalog == 'AllWISE':
-        # https://ui.adsabs.harvard.edu/abs/2015MNRAS.448.1305K/abstract
-        # W1mpro - J2MASS < -1.7 as a rough estimate
-        # 78% of galaxies are selected, 1.8% cstellar contaminants
-        # So does not mean that undefined are only stars
-        # but when flagged as galaxy we are quite sure
-        # BUT criteria tested on a bright sample, and we have usually faint objets
-        # So this should be considered as a hint not a strict information
-
-        # More complex criteria: https://arxiv.org/pdf/1607.01190.pdf
         for row in table:
             if row['w1sigmpro'] and row['j_msig_2mass']:
                 if row['w1mpro'] - row['j_m_2mass'] < -1.7:
@@ -70,7 +60,6 @@ def add_object_type(table, catalog):
                 type_list.append('unknown')
     
     elif catalog == 'GLADE':
-        #the GLADE catalog is supposed to only contain galaxy
         type_list.append('galaxy')
     
     else:
@@ -78,8 +67,8 @@ def add_object_type(table, catalog):
             type_list.append('unknown')
 
     table['objType'] = type_list
-
     return table
+
 
 def query_catalog(coords, radius, catalog, radius_min=20*u.arcsecond):
     """Query the provided position with the given radius and catalog"""
@@ -88,25 +77,65 @@ def query_catalog(coords, radius, catalog, radius_min=20*u.arcsecond):
         radius = radius_min
 
     if catalog == "Pan-STARRS":
-        # Avoid duplicates using the flag below
-        # Information taken from http://ps1images.stsci.edu/ps1_dr2_api.html
-        constraints = {'primaryDetection':1, 'sort_by':'distance.ASC'}
-
-        query = Catalogs.query_region(coords,
-                                      radius=radius,
-                                      catalog="Panstarrs",
-                                      data_release="dr2",
-                                      table="stack",
-                                      primaryDetection = 1)
+    
+        url = "https://catalogs.mast.stsci.edu/api/v0.1/panstarrs/dr2/stack.csv"
+    
+        params = {
+            "ra": coords.ra.deg,
+            "dec": coords.dec.deg,
+            "radius": radius.to(u.deg).value,
+            "primaryDetection": 1
+        }
+    
+        r = requests.get(url, params=params)
+        r.raise_for_status()
+    
+        if r.content.strip() == b"":
+            return None
+    
+        query = ascii.read(io.BytesIO(r.content), format='csv')
+    
         if len(query) == 0:
-            query = None
-        else:
-            query = add_object_type(query, catalog)
+            return None
+    
+        # Reformat like astroquery output
+        for col in query.colnames:
+    
+            try:
+                mag_cols = [
+                    'gKronMag','rKronMag','iKronMag','zKronMag','yKronMag'
+                ]
+                
+                magerr_cols = [
+                    'gKronMagErr','rKronMagErr','iKronMagErr',
+                    'zKronMagErr','yKronMagErr'
+                ]
+                
+                for col in mag_cols + magerr_cols:
+                
+                    if col in query.colnames:
+                
+                        data = np.array(query[col], dtype=float)
+                
+                        mask = (~np.isfinite(data)) | (data == -999)
+                
+                        query.replace_column(
+                            col,
+                            MaskedColumn(data, name=col, mask=mask)
+                        )
+    
+            except:
+                # keep non-numeric columns untouched
+                pass
+    
+        query = add_object_type(query, catalog)
+    
+        if 'distance' in query.colnames:
             query['distance_arcs'] = query['distance'] * 3600
-            query.sort('distance_arcs')    
+            query.sort('distance_arcs')
 
     elif catalog == 'AllWISE':
-        # Need to sort these columns
+
         selcols = "designation,ra,dec,w1mag,w1mpro,w1gmag,ext_flg,var_flg,\
             ph_qual,xscprox,r_2mass,na,nb,w1snr,w1rchi2,rchi2,rchi2,w1sat,\
             n_2mass,tmass_key,j_m_2mass,h_m_2mass,k_m_2mass,sigra,sigdec,\
@@ -116,10 +145,12 @@ def query_catalog(coords, radius, catalog, radius_min=20*u.arcsecond):
             w2rchi2,w3mpro,w3sigmpro,w3snr,w3rchi2,w4mpro,w4sigmpro,w4snr,\
             w4rchi2,w2gmag,w2gerr,w2gflg,w3gmag,w3gerr,w3gflg,w4gmag,w4gerr,\
             w4gflg"
+
         query = Irsa.query_region(coords,
                                   catalog='allwise_p3as_psd',
                                   selcols=selcols,
                                   radius=radius)
+
         if len(query) == 0:
             query = None
         else:

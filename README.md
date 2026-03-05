@@ -15,6 +15,8 @@ The main dependencies are the following :
 
 -matplotlib
 
+-astroquery
+
 
 The current version of the code allows to use Pan-STARRS, HSC, AllWISE and GLADE catalogs. The code Also pre-check for nearby bright galaxy using the RC3 catalog (https://heasarc.gsfc.nasa.gov/w3browse/all/rc3.html). When a nearby galaxy is found, a warning is raised to the user and the properties of the galaxy are saved in a dedicated output file.
 
